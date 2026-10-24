@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "id": "staffcheck",
+  "version": "${version}",
+  "name": "StaffCheck",
+  "description": "Staff /check and /uncheck with Guardian animation, custom skull, and titles.",
+  "authors": ["Kestrel"],
+  "contact": {},
+  "license": "MIT",
+  "environment": "*",
+  "entrypoints": {
+    "main": ["dev.kestrel.staffcheck.StaffCheckMod"]
+  },
+  "depends": {
+    "fabricloader": ">=0.16.0",
+    "fabric-api": "*",
+    "minecraft": "~1.21.1"
+  }
+}

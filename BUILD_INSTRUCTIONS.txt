@@ -1,0 +1,69 @@
+═══════════════════════════════════════════════════════
+  StaffCheck — MC 1.21.1 Fabric Server Mod
+  HOW TO GET THE JAR (no Java install needed)
+═══════════════════════════════════════════════════════
+
+EASIEST: GitHub builds it for you (free, ~3 minutes)
+──────────────────────────────────────────────────────
+
+STEP 1 — Create a free GitHub account if you don't have one
+  https://github.com/signup
+
+STEP 2 — Create a new repository
+  • Go to https://github.com/new
+  • Name it anything, e.g.  staffcheck-mod
+  • Set it to Private (or Public — your choice)
+  • Do NOT tick "Add README" or any other option
+  • Click "Create repository"
+
+STEP 3 — Upload the project files
+  • On your new repo page click  "uploading an existing file"
+  • Drag the CONTENTS of this ZIP (the staffcheck/ folder contents) into the
+    upload box — make sure these are visible at the root level:
+       build.gradle
+       settings.gradle
+       src/
+       .github/
+  • Scroll down, click "Commit changes"
+
+STEP 4 — Download the built JAR
+  • Click the "Actions" tab at the top of your repo
+  • Wait ~3 minutes for the green checkmark ✓
+  • Click the run → scroll to "Artifacts" → download  staffcheck-1.0.0
+  • Extract the zip → grab  staffcheck-1.0.0.jar
+
+STEP 5 — Install on your server
+  • Drop staffcheck-1.0.0.jar into  server/mods/
+  • Also needs: fabric-api-0.102.x+1.21.1.jar  in the same folder
+    (download from https://modrinth.com/mod/fabric-api/versions?g=1.21.1)
+  • Restart the server — done.
+
+═══════════════════════════════════════════════════════
+  COMMANDS (require op level 2 or higher)
+═══════════════════════════════════════════════════════
+
+  /check <playername>   — watch that player in spectator
+  /uncheck              — stop watching, return to your spot
+
+═══════════════════════════════════════════════════════
+  WHAT HAPPENS WHEN YOU /check SOMEONE
+═══════════════════════════════════════════════════════
+
+  1. You enter spectator mode, teleported to their position
+  2. Guardian curse sound plays for both of you
+  3. Skull with YOUR skin descends over them (Guardian-style animation)
+  4. Their screen shows title:
+       [YOUR NAME]          ← big red bold
+       is WATCHING YOU      ← red subtitle
+     (fades in → stays 3 s → fades out)
+
+  /uncheck:
+  1. Guardian sound plays for both
+  2. Skull rises upward (reverse animation)
+  3. Their screen shows:
+       [YOUR NAME]          ← big green bold
+       STOPPED WATCHING YOU ← green subtitle
+  4. You're teleported back to where you were when you did /check
+  5. Your previous game mode restored
+
+═══════════════════════════════════════════════════════
