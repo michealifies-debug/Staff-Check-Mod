@@ -375,7 +375,6 @@ public final class CheckCommand {
         stand.setNoGravity(true);
         stand.setSilent(true);
         stand.setCustomNameVisible(false);
-        stand.setSmall(true);
         stand.setHideBasePlate(true);
 
         ItemStack skull = new ItemStack(Items.PLAYER_HEAD);
