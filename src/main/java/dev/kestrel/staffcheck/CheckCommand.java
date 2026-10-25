@@ -1,17 +1,16 @@
-
 package dev.kestrel.staffcheck;
 
+import com.mojang.authlib.GameProfile;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.context.CommandContext;
-
 import net.minecraft.command.argument.EntityArgumentType;
-import net.minecraft.command.permission.PermissionLevel;
+import net.minecraft.command.permission.Permission;
 import net.minecraft.component.DataComponentTypes;
 import net.minecraft.component.type.ProfileComponent;
-import net.minecraft.entity.EquipmentSlot;
 import net.minecraft.entity.decoration.ArmorStandEntity;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
+import net.minecraft.nbt.NbtCompound;
 import net.minecraft.network.packet.s2c.play.PlaySoundS2CPacket;
 import net.minecraft.network.packet.s2c.play.SubtitleS2CPacket;
 import net.minecraft.network.packet.s2c.play.TitleFadeS2CPacket;
@@ -26,14 +25,8 @@ import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
 import net.minecraft.world.GameMode;
 
-import java.util.Collections;
-import java.util.Map;
-import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.TimeUnit;
+import java.util.*;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static net.minecraft.server.command.CommandManager.argument;
@@ -41,11 +34,8 @@ import static net.minecraft.server.command.CommandManager.literal;
 
 public final class CheckCommand {
 
-    private static final Map<UUID, CheckSession> activeSessions =
-            new ConcurrentHashMap<>();
-
-    private static final Map<UUID, UUID> targetToChecker =
-            new ConcurrentHashMap<>();
+    private static final Map<UUID, CheckSession> activeSessions = new ConcurrentHashMap<>();
+    private static final Map<UUID, UUID> targetToChecker = new ConcurrentHashMap<>();
 
     private static final ScheduledExecutorService SCHEDULER =
             Executors.newSingleThreadScheduledExecutor(r -> {
@@ -57,24 +47,18 @@ public final class CheckCommand {
     private static final int ANIMATION_TICKS = 30;
     private static final double ANIMATION_HEIGHT = 2.5;
 
-    public static void register(
-            CommandDispatcher<ServerCommandSource> dispatcher) {
-
+    public static void register(CommandDispatcher<ServerCommandSource> dispatcher) {
         dispatcher.register(literal("check")
-                .requires(src -> src.getPermissions()
-                        .hasPermission(PermissionLevel.GAMEMASTERS))
+                .requires(src -> src.hasPermission(Permission.GAMEMASTERS))
                 .then(argument("player", EntityArgumentType.player())
                         .executes(CheckCommand::executeCheck)));
 
         dispatcher.register(literal("uncheck")
-                .requires(src -> src.getPermissions()
-                        .hasPermission(PermissionLevel.GAMEMASTERS))
+                .requires(src -> src.hasPermission(Permission.GAMEMASTERS))
                 .executes(CheckCommand::executeUncheck));
     }
 
-    private static int executeCheck(
-            CommandContext<ServerCommandSource> ctx) {
-
+    private static int executeCheck(CommandContext<ServerCommandSource> ctx) {
         ServerCommandSource src = ctx.getSource();
 
         ServerPlayerEntity checker;
@@ -99,22 +83,20 @@ public final class CheckCommand {
         }
 
         if (activeSessions.containsKey(checker.getUuid())) {
-            src.sendError(Text.literal(
-                    "Already in a session. Use /uncheck first."));
+            src.sendError(Text.literal("Already in a session. Use /uncheck first."));
             return 0;
         }
 
         if (targetToChecker.containsKey(target.getUuid())) {
-            src.sendError(Text.literal(
-                    "That player is already being checked."));
+            src.sendError(Text.literal("That player is already being checked."));
             return 0;
         }
 
         CheckSession session = new CheckSession(
                 checker,
                 target,
-                checker.getEntityPos(),
-                checker.getEntityWorld().getRegistryKey(),
+                checker.getPos(),
+                checker.getServerWorld().getRegistryKey(),
                 checker.getYaw(),
                 checker.getPitch(),
                 checker.interactionManager.getGameMode()
@@ -124,33 +106,25 @@ public final class CheckCommand {
         targetToChecker.put(target.getUuid(), checker.getUuid());
 
         checker.changeGameMode(GameMode.SPECTATOR);
-
         teleportSpecToTarget(checker, target);
 
         playGuardianSound(checker);
         playGuardianSound(target);
 
         ArmorStandEntity stand = spawnSkullStand(
-                target.getEntityWorld(), checker, target, true);
-
+                target.getServerWorld(), checker, target, true
+        );
         session.skullEntityUuid = stand.getUuid();
 
-        SCHEDULER.schedule(
-                () -> checker.getEntityWorld().getServer().execute(() -> {
-                    if (!activeSessions.containsKey(checker.getUuid())) {
-                        return;
-                    }
-
-                    sendWatchingTitle(
-                            target, checker.getName().getString());
-                }),
-                ANIMATION_TICKS * 50L,
-                TimeUnit.MILLISECONDS
-        );
+        SCHEDULER.schedule(() -> checker.getServer().execute(() -> {
+            if (!activeSessions.containsKey(checker.getUuid())) {
+                return;
+            }
+            sendWatchingTitle(target, checker.getName().getString());
+        }), ANIMATION_TICKS * 50L, TimeUnit.MILLISECONDS);
 
         src.sendFeedback(
-                () -> Text.literal(
-                        "Now checking " + target.getName().getString())
+                () -> Text.literal("Now checking " + target.getName().getString())
                         .formatted(Formatting.GREEN),
                 false
         );
@@ -158,9 +132,7 @@ public final class CheckCommand {
         return 1;
     }
 
-    private static int executeUncheck(
-            CommandContext<ServerCommandSource> ctx) {
-
+    private static int executeUncheck(CommandContext<ServerCommandSource> ctx) {
         ServerCommandSource src = ctx.getSource();
 
         ServerPlayerEntity checker;
@@ -181,8 +153,7 @@ public final class CheckCommand {
         doUncheck(session);
 
         src.sendFeedback(
-                () -> Text.literal(
-                        "Unchecked " + session.target.getName().getString())
+                () -> Text.literal("Unchecked " + session.target.getName().getString())
                         .formatted(Formatting.YELLOW),
                 false
         );
@@ -198,8 +169,7 @@ public final class CheckCommand {
         targetToChecker.remove(target.getUuid());
 
         if (session.skullEntityUuid != null) {
-            removeStandByUuid(
-                    target.getEntityWorld(), session.skullEntityUuid);
+            removeStandByUuid(target.getServerWorld(), session.skullEntityUuid);
             session.skullEntityUuid = null;
         }
 
@@ -207,23 +177,16 @@ public final class CheckCommand {
         playGuardianSound(target);
 
         ArmorStandEntity exitStand = spawnSkullStand(
-                target.getEntityWorld(), checker, target, false);
+                target.getServerWorld(), checker, target, false
+        );
 
         UUID exitUuid = exitStand.getUuid();
 
-        SCHEDULER.schedule(
-                () -> checker.getEntityWorld().getServer().execute(() -> {
-                    removeStandByUuid(
-                            target.getEntityWorld(), exitUuid);
-
-                    sendStoppedWatchingTitle(
-                            target, checker.getName().getString());
-
-                    returnChecker(checker, session);
-                }),
-                ANIMATION_TICKS * 50L,
-                TimeUnit.MILLISECONDS
-        );
+        SCHEDULER.schedule(() -> checker.getServer().execute(() -> {
+            removeStandByUuid(target.getServerWorld(), exitUuid);
+            sendStoppedWatchingTitle(target, checker.getName().getString());
+            returnChecker(checker, session);
+        }), ANIMATION_TICKS * 50L, TimeUnit.MILLISECONDS);
     }
 
     public static void handleTargetDisconnect(ServerPlayerEntity target) {
@@ -240,24 +203,19 @@ public final class CheckCommand {
         }
 
         if (session.skullEntityUuid != null) {
-            removeStandByUuid(
-                    target.getEntityWorld(), session.skullEntityUuid);
+            removeStandByUuid(target.getServerWorld(), session.skullEntityUuid);
         }
 
         returnChecker(session.checker, session);
 
         session.checker.sendMessage(
-                Text.literal(
-                        "[StaffCheck] " + target.getName().getString()
-                                + " disconnected.")
+                Text.literal("[StaffCheck] " + target.getName().getString() + " disconnected.")
                         .formatted(Formatting.YELLOW),
                 false
         );
     }
 
-    public static void handleCheckerDisconnect(
-            ServerPlayerEntity checker) {
-
+    public static void handleCheckerDisconnect(ServerPlayerEntity checker) {
         CheckSession session = activeSessions.remove(checker.getUuid());
 
         if (session == null) {
@@ -267,9 +225,7 @@ public final class CheckCommand {
         targetToChecker.remove(session.target.getUuid());
 
         if (session.skullEntityUuid != null) {
-            removeStandByUuid(
-                    session.target.getEntityWorld(),
-                    session.skullEntityUuid);
+            removeStandByUuid(session.target.getServerWorld(), session.skullEntityUuid);
         }
     }
 
@@ -277,9 +233,7 @@ public final class CheckCommand {
         return targetToChecker.containsKey(player.getUuid());
     }
 
-    public static CheckSession getSessionForChecker(
-            ServerPlayerEntity checker) {
-
+    public static CheckSession getSessionForChecker(ServerPlayerEntity checker) {
         return activeSessions.get(checker.getUuid());
     }
 
@@ -287,8 +241,8 @@ public final class CheckCommand {
             ServerWorld world,
             ServerPlayerEntity checker,
             ServerPlayerEntity target,
-            boolean entry) {
-
+            boolean entry
+    ) {
         double baseX = target.getX();
         double baseY = target.getY();
         double baseZ = target.getZ();
@@ -297,7 +251,11 @@ public final class CheckCommand {
         double endOffset = entry ? 0.0 : ANIMATION_HEIGHT;
 
         ArmorStandEntity stand = new ArmorStandEntity(
-                world, baseX, baseY + startOffset, baseZ);
+                world,
+                baseX,
+                baseY + startOffset,
+                baseZ
+        );
 
         stand.setInvisible(true);
         stand.setInvulnerable(true);
@@ -305,14 +263,18 @@ public final class CheckCommand {
         stand.setSilent(true);
         stand.setCustomNameVisible(false);
 
-        ItemStack skull = new ItemStack(Items.PLAYER_HEAD);
+        NbtCompound nbt = new NbtCompound();
+        stand.writeNbt(nbt);
+        nbt.putBoolean("Marker", true);
+        stand.readNbt(nbt);
 
+        ItemStack skull = new ItemStack(Items.PLAYER_HEAD);
         skull.set(
                 DataComponentTypes.PROFILE,
-                ProfileComponent.ofStatic(checker.getGameProfile())
+                new ProfileComponent(checker.getGameProfile())
         );
 
-        stand.equipStack(EquipmentSlot.HEAD, skull);
+        stand.equipStack(net.minecraft.entity.EquipmentSlot.HEAD, skull);
         world.spawnEntity(stand);
 
         AtomicInteger tick = new AtomicInteger(0);
@@ -330,24 +292,20 @@ public final class CheckCommand {
                     }
 
                     double raw = (double) t / ANIMATION_TICKS;
-
                     double eased = entry
                             ? raw * raw
                             : 1.0 - Math.pow(1.0 - raw, 2);
 
-                    double yOff = startOffset
-                            + (endOffset - startOffset) * eased;
+                    double yOff = startOffset + (endOffset - startOffset) * eased;
 
-                    ArmorStandEntity currentStand =
-                            findStand(world, standUuid);
+                    ArmorStandEntity s = findStand(world, standUuid);
 
-                    if (currentStand == null) {
+                    if (s == null) {
                         handle[0].cancel(false);
                         return;
                     }
 
-                    currentStand.setPosition(
-                            baseX, baseY + yOff, baseZ);
+                    s.setPosition(baseX, baseY + yOff, baseZ);
                 }),
                 50,
                 50,
@@ -357,17 +315,12 @@ public final class CheckCommand {
         return stand;
     }
 
-    private static ArmorStandEntity findStand(
-            ServerWorld world, UUID uuid) {
-
+    private static ArmorStandEntity findStand(ServerWorld world, UUID uuid) {
         net.minecraft.entity.Entity entity = world.getEntity(uuid);
-
         return entity instanceof ArmorStandEntity stand ? stand : null;
     }
 
-    private static void removeStandByUuid(
-            ServerWorld world, UUID uuid) {
-
+    private static void removeStandByUuid(ServerWorld world, UUID uuid) {
         ArmorStandEntity stand = findStand(world, uuid);
 
         if (stand != null) {
@@ -377,28 +330,31 @@ public final class CheckCommand {
 
     private static void teleportSpecToTarget(
             ServerPlayerEntity checker,
-            ServerPlayerEntity target) {
-
+            ServerPlayerEntity target
+    ) {
         checker.teleport(
-                target.getEntityWorld(),
+                target.getServerWorld(),
                 target.getX(),
                 target.getY() + target.getStandingEyeHeight(),
                 target.getZ(),
-                Collections.emptySet(),
+                Set.of(),
                 target.getYaw(),
                 target.getPitch(),
-                true
+                false
         );
     }
 
     private static void returnChecker(
             ServerPlayerEntity checker,
-            CheckSession session) {
+            CheckSession session
+    ) {
+        net.minecraft.server.MinecraftServer server = checker.getServer();
 
-        var server = checker.getEntityWorld().getServer();
+        if (server == null) {
+            return;
+        }
 
-        ServerWorld returnWorld =
-                server.getWorld(session.checkerReturnWorld);
+        ServerWorld returnWorld = server.getWorld(session.checkerReturnWorld);
 
         if (returnWorld == null) {
             returnWorld = server.getOverworld();
@@ -409,10 +365,10 @@ public final class CheckCommand {
                 session.checkerReturnPos.x,
                 session.checkerReturnPos.y,
                 session.checkerReturnPos.z,
-                Collections.emptySet(),
+                Set.of(),
                 session.checkerReturnYaw,
                 session.checkerReturnPitch,
-                true
+                false
         );
 
         checker.changeGameMode(session.checkerPreviousGameMode);
@@ -432,36 +388,32 @@ public final class CheckCommand {
     }
 
     private static void sendWatchingTitle(
-            ServerPlayerEntity target, String checkerName) {
+            ServerPlayerEntity target,
+            String checkerName
+    ) {
+        target.networkHandler.sendPacket(new TitleFadeS2CPacket(20, 60, 20));
 
-        target.networkHandler.sendPacket(
-                new TitleFadeS2CPacket(20, 60, 20));
+        target.networkHandler.sendPacket(new TitleS2CPacket(
+                Text.literal(checkerName).formatted(Formatting.RED, Formatting.BOLD)
+        ));
 
-        target.networkHandler.sendPacket(
-                new TitleS2CPacket(
-                        Text.literal(checkerName)
-                                .formatted(Formatting.RED, Formatting.BOLD)));
-
-        target.networkHandler.sendPacket(
-                new SubtitleS2CPacket(
-                        Text.literal("is WATCHING YOU")
-                                .formatted(Formatting.RED, Formatting.BOLD)));
+        target.networkHandler.sendPacket(new SubtitleS2CPacket(
+                Text.literal("is WATCHING YOU").formatted(Formatting.RED, Formatting.BOLD)
+        ));
     }
 
     private static void sendStoppedWatchingTitle(
-            ServerPlayerEntity target, String checkerName) {
+            ServerPlayerEntity target,
+            String checkerName
+    ) {
+        target.networkHandler.sendPacket(new TitleFadeS2CPacket(20, 60, 20));
 
-        target.networkHandler.sendPacket(
-                new TitleFadeS2CPacket(20, 60, 20));
+        target.networkHandler.sendPacket(new TitleS2CPacket(
+                Text.literal(checkerName).formatted(Formatting.GREEN, Formatting.BOLD)
+        ));
 
-        target.networkHandler.sendPacket(
-                new TitleS2CPacket(
-                        Text.literal(checkerName)
-                                .formatted(Formatting.GREEN, Formatting.BOLD)));
-
-        target.networkHandler.sendPacket(
-                new SubtitleS2CPacket(
-                        Text.literal("STOPPED WATCHING YOU")
-                                .formatted(Formatting.GREEN, Formatting.BOLD)));
+        target.networkHandler.sendPacket(new SubtitleS2CPacket(
+                Text.literal("STOPPED WATCHING YOU").formatted(Formatting.GREEN, Formatting.BOLD)
+        ));
     }
 }
