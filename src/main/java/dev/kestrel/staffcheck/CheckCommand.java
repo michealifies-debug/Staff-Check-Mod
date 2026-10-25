@@ -22,7 +22,6 @@ import net.minecraft.sound.SoundCategory;
 import net.minecraft.sound.SoundEvents;
 import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
-import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.GameMode;
 
 import java.util.*;
@@ -182,13 +181,11 @@ public final class CheckCommand {
         stand.setSilent(true);
         stand.setCustomNameVisible(false);
 
-        // setMarker is private in 1.21.1 — set via NBT instead
         NbtCompound nbt = new NbtCompound();
         stand.writeNbt(nbt);
         nbt.putBoolean("Marker", true);
         stand.readNbt(nbt);
 
-        // Skull with checker's skin via 1.21.1 component API
         ItemStack skull = new ItemStack(Items.PLAYER_HEAD);
         skull.set(DataComponentTypes.PROFILE, new ProfileComponent(checker.getGameProfile()));
         stand.equipStack(net.minecraft.entity.EquipmentSlot.HEAD, skull);
@@ -262,3 +259,4 @@ public final class CheckCommand {
                 Text.literal("STOPPED WATCHING YOU").formatted(Formatting.GREEN, Formatting.BOLD)));
     }
 }
+
