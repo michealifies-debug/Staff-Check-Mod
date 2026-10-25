@@ -64,7 +64,7 @@ public final class CheckCommand {
     }
 
     private static ServerWorld getServerWorld(ServerPlayerEntity player) {
-        return (ServerWorld) player.getWorld();
+        return player.getEntityWorld();
     }
 
     private static MinecraftServer getServer(ServerPlayerEntity player) {
